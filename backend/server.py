@@ -513,7 +513,11 @@ async def cellular_triangulation(request: CellularTriangulationRequest):
     Perform cellular triangulation using Unwired Labs API.
     This is the fallback when GPS is unavailable or inaccurate.
     
-    IMPORTANT: Cellular triangulation is approximate. Never override good GPS data.
+    Supports:
+    1. Cell tower triangulation (if MCC/MNC/LAC/CID provided)
+    2. IP-based geolocation (fallback when cell data not available)
+    
+    IMPORTANT: Cellular/IP triangulation is approximate. Never override good GPS data.
     """
     trip = await db.trips.find_one({"id": request.trip_id})
     if not trip:
@@ -522,16 +526,14 @@ async def cellular_triangulation(request: CellularTriangulationRequest):
     if UNWIRED_LABS_API_KEY == 'demo_key':
         # Demo mode - return simulated location
         logger.warning("Unwired Labs API key not configured - using demo response")
-        # Return a demo location (for testing purposes)
         demo_response = {
-            "latitude": 28.6139,  # Delhi coordinates as demo
+            "latitude": 28.6139,
             "longitude": 77.2090,
-            "accuracy_radius": 1000,  # 1km accuracy typical for cellular
+            "accuracy_radius": 1000,
             "source": "cellular_unwiredlabs",
             "status": "demo_mode"
         }
         
-        # Still add to trip for demo
         loc_point = LocationPoint(
             latitude=demo_response["latitude"],
             longitude=demo_response["longitude"],
@@ -553,21 +555,34 @@ async def cellular_triangulation(request: CellularTriangulationRequest):
     try:
         url = "https://us1.unwiredlabs.com/v2/process.php"
         
+        # Build payload based on available data
         payload = {
             "token": UNWIRED_LABS_API_KEY,
-            "radio": "gsm",
-            "mcc": request.mcc,
-            "mnc": request.mnc,
-            "cells": [{
+            "address": 0
+        }
+        
+        # If cell tower data is provided, use it
+        if request.mcc and request.mnc and request.lac and request.cid:
+            payload["radio"] = "gsm"
+            payload["mcc"] = request.mcc
+            payload["mnc"] = request.mnc
+            payload["cells"] = [{
                 "lac": request.lac,
                 "cid": request.cid,
                 "signal": request.signal_strength or -70
-            }],
-            "address": 0  # Don't need address lookup
-        }
+            }]
+            logger.info(f"Using cell tower data for triangulation: MCC={request.mcc}, MNC={request.mnc}")
+        else:
+            # Use IP-based geolocation as fallback
+            # Unwired Labs will use the request IP to determine location
+            payload["fallbacks"] = {
+                "all": True,
+                "ipf": 1  # Enable IP fallback
+            }
+            logger.info("Using IP-based geolocation (no cell data provided)")
         
         async with httpx.AsyncClient() as http_client:
-            response = await http_client.post(url, json=payload)
+            response = await http_client.post(url, json=payload, timeout=10.0)
         
         data = response.json()
         
@@ -576,7 +591,7 @@ async def cellular_triangulation(request: CellularTriangulationRequest):
                 latitude=data["lat"],
                 longitude=data["lon"],
                 source="cellular_unwiredlabs",
-                accuracy_radius=data.get("accuracy", 1000)
+                accuracy_radius=data.get("accuracy", 5000)  # IP-based is less accurate
             )
             
             loc_dict = loc_point.model_dump()
@@ -587,19 +602,19 @@ async def cellular_triangulation(request: CellularTriangulationRequest):
                 {"$push": {"locations": loc_dict}}
             )
             
-            logger.info(f"Cellular triangulation successful for trip {request.trip_id}: lat={data['lat']}, lon={data['lon']}, accuracy={data.get('accuracy', 1000)}m")
+            method = "cell_tower" if request.mcc else "ip_geolocation"
+            logger.info(f"Triangulation successful ({method}) for trip {request.trip_id}: lat={data['lat']}, lon={data['lon']}, accuracy={data.get('accuracy', 5000)}m")
             
             return {
                 "latitude": data["lat"],
                 "longitude": data["lon"],
-                "accuracy_radius": data.get("accuracy", 1000),
+                "accuracy_radius": data.get("accuracy", 5000),
                 "source": "cellular_unwiredlabs",
+                "method": method,
                 "balance": data.get("balance"),
                 "status": "success"
             }
         else:
-            # Handle "no matches" - cell tower not in database
-            # This is expected for some cell towers
             error_msg = data.get("message", "Unknown error")
             balance = data.get("balance", "unknown")
             logger.warning(f"Unwired Labs: {error_msg} (API balance: {balance})")
@@ -608,7 +623,7 @@ async def cellular_triangulation(request: CellularTriangulationRequest):
                 "status": "no_match",
                 "message": error_msg,
                 "balance": balance,
-                "detail": "Cell tower not found in Unwired Labs database. This can happen with newer or less common towers."
+                "detail": "Location could not be determined. Try again or check network connection."
             }
             
     except httpx.RequestError as e:
