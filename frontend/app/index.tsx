@@ -13,11 +13,22 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import { Accelerometer, Gyroscope } from 'expo-sensors';
 import { router } from 'expo-router';
 import { useTripStore } from '../store/tripStore';
 import MapView from '../components/MapView';
+
+// Conditional imports for native-only modules
+let Location: typeof import('expo-location') | null = null;
+let Accelerometer: typeof import('expo-sensors').Accelerometer | null = null;
+let Gyroscope: typeof import('expo-sensors').Gyroscope | null = null;
+
+// Only import native modules on native platforms
+if (Platform.OS !== 'web') {
+  Location = require('expo-location');
+  const sensors = require('expo-sensors');
+  Accelerometer = sensors.Accelerometer;
+  Gyroscope = sensors.Gyroscope;
+}
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
