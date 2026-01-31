@@ -359,15 +359,15 @@ export default function DebugScreen() {
           <View style={styles.card}>
             <View style={styles.row}>
               <Text style={styles.label}>Panic Accel Variance:</Text>
-              <Text style={styles.value}>&gt; 15 m/s²</Text>
+              <Text style={styles.value}>{"> 15 m/s²"}</Text>
             </View>
             <View style={styles.row}>
               <Text style={styles.label}>Panic Gyro Variance:</Text>
-              <Text style={styles.value}>&gt; 5 rad/s</Text>
+              <Text style={styles.value}>{"> 5 rad/s"}</Text>
             </View>
             <View style={styles.row}>
               <Text style={styles.label}>GPS Fallback:</Text>
-              <Text style={styles.value}>accuracy &gt; 100m</Text>
+              <Text style={styles.value}>{"accuracy > 100m"}</Text>
             </View>
             <View style={styles.row}>
               <Text style={styles.label}>Night Hours:</Text>
