@@ -686,6 +686,28 @@ export default function HomeScreen() {
           </View>
         )}
         
+        {/* New Features Section */}
+        <View style={styles.featuresSection}>
+          <Text style={styles.featuresSectionTitle}>Safety Tools</Text>
+          <View style={styles.featuresGrid}>
+            <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/routes')}>
+              <View style={[styles.featureIconContainer, { backgroundColor: '#3498db20' }]}>
+                <Ionicons name="map" size={28} color="#3498db" />
+              </View>
+              <Text style={styles.featureTitle}>Safe Routes</Text>
+              <Text style={styles.featureDesc}>Find safer travel paths</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.featureCard} onPress={() => router.push('/chat-safety')}>
+              <View style={[styles.featureIconContainer, { backgroundColor: '#e74c3c20' }]}>
+                <Ionicons name="chatbubbles" size={28} color="#e74c3c" />
+              </View>
+              <Text style={styles.featureTitle}>Chat Safety</Text>
+              <Text style={styles.featureDesc}>Analyze suspicious chats</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        
         <View style={styles.infoSection}>
           <View style={styles.infoCard}>
             <Ionicons name="location" size={24} color="#3498db" />
