@@ -1272,8 +1272,8 @@ async def analyze_route_safety(request: RouteRequest):
     
     # Get nearby safe spots
     nearby_safe_spots = await get_safe_spots(
-        (request.origin_lat + request.dest_lat) / 2,
-        (request.origin_lng + request.dest_lng) / 2
+        (request.origin_lat + dest_lat) / 2,
+        (request.origin_lng + dest_lng) / 2
     )
     
     # Generate recommendations
