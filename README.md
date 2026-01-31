@@ -226,13 +226,3 @@ This project is **prototype-ready** and suitable for:
 
 ```
 
----
-
-If you want, I can also:
-- Add **architecture diagrams**
-- Write a **hackathon submission README**
-- Convert this into **production deployment docs**
-- Add **API documentation (Swagger)**
-
-Just tell me.
-```
