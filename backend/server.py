@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 # ===========================================
 UNWIRED_LABS_API_KEY = os.environ.get('UNWIRED_LABS_API_KEY', 'demo_key')
 FAST2SMS_API_KEY = os.environ.get('FAST2SMS_API_KEY', 'demo_key')
+EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
 # ===========================================
 # Pydantic Models
