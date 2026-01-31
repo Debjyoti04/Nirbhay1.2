@@ -106,11 +106,13 @@ class LocationInput(BaseModel):
 class CellularTriangulationRequest(BaseModel):
     """Request for cellular triangulation via Unwired Labs"""
     trip_id: str
-    mcc: int  # Mobile Country Code
-    mnc: int  # Mobile Network Code
-    lac: int  # Location Area Code
-    cid: int  # Cell ID
+    mcc: Optional[int] = None  # Mobile Country Code
+    mnc: Optional[int] = None  # Mobile Network Code
+    lac: Optional[int] = None  # Location Area Code
+    cid: Optional[int] = None  # Cell ID
     signal_strength: Optional[int] = None
+    # For IP-based fallback when cell data not available
+    use_ip_fallback: bool = True
 
 class MotionInput(BaseModel):
     trip_id: str
