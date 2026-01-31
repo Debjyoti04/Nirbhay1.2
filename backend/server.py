@@ -1285,6 +1285,11 @@ async def analyze_chat_safety(request: ChatAnalysisRequest):
             system_message=CHAT_ANALYSIS_SYSTEM_PROMPT
         ).with_model("anthropic", "claude-sonnet-4-20250514")
         
+        # Build the message
+        analysis_prompt = "Please analyze this chat screenshot for safety concerns."
+        if request.context:
+            analysis_prompt += f"\n\nAdditional context from user: {request.context}"
+        
         # Create image content from base64
         # Try different approach - pass image as part of text message
         user_message = UserMessage(
