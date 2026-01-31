@@ -125,6 +125,68 @@ class GuardianUpdate(BaseModel):
     guardian_fcm_token: Optional[str] = None
 
 # ===========================================
+# Safe Route Models
+# ===========================================
+
+class RouteRequest(BaseModel):
+    """Request for safe route analysis"""
+    origin_lat: float
+    origin_lng: float
+    dest_lat: float
+    dest_lng: float
+    travel_time: Optional[str] = None  # ISO format, defaults to now
+
+class SafetyFactor(BaseModel):
+    """Individual safety factor with score"""
+    name: str
+    score: float  # 0-100
+    description: str
+    icon: str
+
+class TransportMode(BaseModel):
+    """Transport mode recommendation"""
+    mode: str  # walk, bus, metro, auto, cab
+    safety_score: float
+    estimated_time: int  # minutes
+    recommendation: str
+    icon: str
+
+class RouteResponse(BaseModel):
+    """Response with route safety analysis"""
+    overall_safety_score: float
+    safety_level: str  # safe, moderate, risky
+    factors: List[SafetyFactor]
+    transport_modes: List[TransportMode]
+    route_points: List[dict]
+    recommendations: List[str]
+    nearby_safe_spots: List[dict]
+
+# ===========================================
+# Chat Safety Analysis Models
+# ===========================================
+
+class ChatAnalysisRequest(BaseModel):
+    """Request to analyze chat screenshot"""
+    image_base64: str  # Base64 encoded image
+    context: Optional[str] = None  # Additional context about the conversation
+
+class RedFlag(BaseModel):
+    """Detected red flag in chat"""
+    type: str  # love_bombing, personal_info_request, pressure_tactics, isolation, inappropriate
+    severity: str  # low, medium, high, critical
+    evidence: str  # Specific text/pattern that triggered this
+    explanation: str
+
+class ChatAnalysisResponse(BaseModel):
+    """Response from chat safety analysis"""
+    risk_level: str  # safe, low_risk, moderate_risk, high_risk, dangerous
+    risk_score: float  # 0-100
+    red_flags: List[RedFlag]
+    advisory: str
+    action_items: List[str]
+    resources: List[dict]
+
+# ===========================================
 # Risk Detection Rules (Configurable Thresholds)
 # ===========================================
 
