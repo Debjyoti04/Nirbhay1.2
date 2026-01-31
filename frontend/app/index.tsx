@@ -252,15 +252,15 @@ export default function HomeScreen() {
       console.error('GPS location tracking error:', error);
       gpsAttemptFailed = true;
       
-      // GPS failed - start IP-based fallback polling
-      console.log('Starting IP-based geolocation fallback...');
+      // GPS failed - start last-known-location fallback polling
+      console.log('Starting last-known-location fallback (80-100m accuracy)...');
       
-      // Get initial location via IP
-      await fallbackToIPGeolocation(tripId);
+      // Get initial fallback location
+      await fallbackToLastLocation(tripId);
       
-      // Poll every 10 seconds for IP-based location
+      // Poll every 10 seconds using last known location
       fallbackIntervalId = setInterval(async () => {
-        await fallbackToIPGeolocation(tripId);
+        await fallbackToLastLocation(tripId);
       }, 10000);
       
       // Store the interval so we can clean it up
