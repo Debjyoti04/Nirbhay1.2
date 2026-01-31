@@ -33,6 +33,8 @@ export default function HomeScreen() {
     motionStatus,
     lastRiskRule,
     guardianPhone,
+    guardianPhone2,
+    guardianPhone3,
     setGuardianPhone,
     startTrip,
     endTrip,
