@@ -1267,7 +1267,7 @@ async def analyze_route_safety(request: RouteRequest):
     # Generate route points (simple straight line for now)
     route_points = [
         {"lat": request.origin_lat, "lng": request.origin_lng, "type": "origin"},
-        {"lat": request.dest_lat, "lng": request.dest_lng, "type": "destination"}
+        {"lat": dest_lat, "lng": dest_lng, "type": "destination"}
     ]
     
     # Get nearby safe spots
