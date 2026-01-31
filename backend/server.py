@@ -1297,9 +1297,9 @@ Please analyze this chat screenshot for safety concerns."""
             mime_type="image/png"
         )
         
-        # Send for analysis with image using gemini-2.0-flash-exp model
+        # Send for analysis with image using gemini-2.5-flash model
         response = client.models.generate_content(
-            model="gemini-2.0-flash-exp",
+            model="gemini-2.5-flash",
             contents=[analysis_prompt, image_part]
         )
         
