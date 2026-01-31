@@ -718,6 +718,14 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
+      
+      {/* Safety Check Modal */}
+      <SafetyCheckModal
+        visible={showSafetyCheck}
+        onSafe={handleSafetyConfirmed}
+        onAlert={handleTriggerAlert}
+        safetyCode="1234"
+      />
     </SafeAreaView>
   );
 }
