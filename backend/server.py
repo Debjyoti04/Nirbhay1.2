@@ -37,10 +37,7 @@ logger = logging.getLogger(__name__)
 # Environment Variables (with defaults for MVP)
 # ===========================================
 UNWIRED_LABS_API_KEY = os.environ.get('UNWIRED_LABS_API_KEY', 'demo_key')
-MSG91_AUTH_KEY = os.environ.get('MSG91_AUTH_KEY', 'demo_key')
-MSG91_SENDER_ID = os.environ.get('MSG91_SENDER_ID', 'NIRBHY')
-MSG91_TEMPLATE_ID = os.environ.get('MSG91_TEMPLATE_ID', '')
-MSG91_DLT_TE_ID = os.environ.get('MSG91_DLT_TE_ID', '')
+FAST2SMS_API_KEY = os.environ.get('FAST2SMS_API_KEY', 'demo_key')
 
 # ===========================================
 # Pydantic Models
