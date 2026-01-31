@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,22 +17,12 @@ import { router } from 'expo-router';
 import { useTripStore } from '../store/tripStore';
 import MapView from '../components/MapView';
 
-// Conditional imports for native-only modules
-let Location: typeof import('expo-location') | null = null;
-let Accelerometer: typeof import('expo-sensors').Accelerometer | null = null;
-let Gyroscope: typeof import('expo-sensors').Gyroscope | null = null;
-
-// Only import native modules on native platforms
-if (Platform.OS !== 'web') {
-  Location = require('expo-location');
-  const sensors = require('expo-sensors');
-  Accelerometer = sensors.Accelerometer;
-  Gyroscope = sensors.Gyroscope;
-}
-
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+
+// Web fallback for demo purposes
+const isWeb = Platform.OS === 'web';
 
 export default function HomeScreen() {
   const {
@@ -57,12 +47,13 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [phoneInput, setPhoneInput] = useState(guardianPhone);
   const [showPhoneInput, setShowPhoneInput] = useState(false);
-  const [locationPermission, setLocationPermission] = useState(false);
+  const [locationPermission, setLocationPermission] = useState(isWeb); // Web always has "permission"
   
-  // Sensor subscriptions
-  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+  // Sensor subscriptions (native only)
+  const locationSubscription = useRef<any>(null);
   const accelSubscription = useRef<any>(null);
   const gyroSubscription = useRef<any>(null);
+  const varianceIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Motion data buffers for variance calculation
   const accelBuffer = useRef<number[]>([]);
@@ -70,18 +61,39 @@ export default function HomeScreen() {
   const BUFFER_SIZE = 50; // ~2.5 seconds at 20Hz
   const VARIANCE_CHECK_INTERVAL = 2000; // Check every 2 seconds
 
-  // Request permissions on mount
+  // Load saved guardian on mount
   useEffect(() => {
-    requestPermissions();
+    const loadData = async () => {
+      const { loadSavedGuardian } = useTripStore.getState();
+      await loadSavedGuardian();
+    };
+    loadData();
+  }, []);
+
+  // Request permissions on mount (native only)
+  useEffect(() => {
+    if (!isWeb) {
+      requestPermissions();
+    }
   }, []);
 
   const requestPermissions = async () => {
+    if (isWeb) {
+      setLocationPermission(true);
+      return;
+    }
+    
     try {
+      const Location = require('expo-location');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         setLocationPermission(true);
         // Also request background permission
-        await Location.requestBackgroundPermissionsAsync();
+        try {
+          await Location.requestBackgroundPermissionsAsync();
+        } catch (e) {
+          console.log('Background permission not available');
+        }
       } else {
         Alert.alert(
           'Permission Required',
@@ -101,26 +113,60 @@ export default function HomeScreen() {
     return squaredDiffs.reduce((a, b) => a + b, 0) / arr.length;
   };
 
-  // Start location tracking
+  // Start location tracking (native)
   const startLocationTracking = async (tripId: string) => {
+    if (isWeb) {
+      // Web demo: simulate location updates
+      const demoInterval = setInterval(() => {
+        const lat = 28.6139 + (Math.random() - 0.5) * 0.01;
+        const lng = 77.2090 + (Math.random() - 0.5) * 0.01;
+        
+        addLocation({
+          latitude: lat,
+          longitude: lng,
+          accuracy: 15,
+          source: 'gps',
+          timestamp: new Date().toISOString(),
+        });
+        
+        setTrackingSource('gps');
+        setAccuracy(15);
+        
+        // Send to backend
+        fetch(`${API_URL}/api/trips/${tripId}/location`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trip_id: tripId,
+            latitude: lat,
+            longitude: lng,
+            accuracy: 15,
+            source: 'gps',
+          }),
+        }).catch(err => console.error('Failed to send location:', err));
+      }, 5000);
+      
+      locationSubscription.current = { remove: () => clearInterval(demoInterval) };
+      return;
+    }
+    
     try {
+      const Location = require('expo-location');
       locationSubscription.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          timeInterval: 5000, // Every 5 seconds
-          distanceInterval: 10, // Or every 10 meters
+          timeInterval: 5000,
+          distanceInterval: 10,
         },
-        async (location) => {
+        async (location: any) => {
           const { latitude, longitude, accuracy: gpsAccuracy } = location.coords;
           
-          // Determine source based on accuracy
           // GPS accuracy > 100m is considered poor, fallback to cellular
           const source = gpsAccuracy && gpsAccuracy > 100 ? 'cellular_unwiredlabs' : 'gps';
           
           setTrackingSource(source);
           setAccuracy(gpsAccuracy || 0);
           
-          // Add to local store
           addLocation({
             latitude,
             longitude,
@@ -152,69 +198,97 @@ export default function HomeScreen() {
     }
   };
 
-  // Start motion tracking
+  // Start motion tracking (native)
   const startMotionTracking = (tripId: string) => {
-    // Reset buffers
-    accelBuffer.current = [];
-    gyroBuffer.current = [];
-    
-    // Set update intervals (50ms = 20Hz)
-    Accelerometer.setUpdateInterval(50);
-    Gyroscope.setUpdateInterval(50);
-    
-    // Subscribe to accelerometer
-    accelSubscription.current = Accelerometer.addListener(({ x, y, z }) => {
-      // Calculate magnitude
-      const magnitude = Math.sqrt(x * x + y * y + z * z);
-      accelBuffer.current.push(magnitude);
-      if (accelBuffer.current.length > BUFFER_SIZE) {
-        accelBuffer.current.shift();
-      }
-    });
-    
-    // Subscribe to gyroscope
-    gyroSubscription.current = Gyroscope.addListener(({ x, y, z }) => {
-      const magnitude = Math.sqrt(x * x + y * y + z * z);
-      gyroBuffer.current.push(magnitude);
-      if (gyroBuffer.current.length > BUFFER_SIZE) {
-        gyroBuffer.current.shift();
-      }
-    });
-    
-    // Periodic variance check
-    const varianceInterval = setInterval(async () => {
-      if (accelBuffer.current.length < 10 || gyroBuffer.current.length < 10) return;
-      
-      const accelVariance = calculateVariance(accelBuffer.current);
-      const gyroVariance = calculateVariance(gyroBuffer.current);
-      
-      // Check if this indicates panic (thresholds from backend)
-      const isPanic = accelVariance > 15 && gyroVariance > 5;
-      
-      setMotionStatus(isPanic ? 'panic_detected' : 'normal');
-      
-      // Send to backend
-      try {
-        const response = await fetch(`${API_URL}/api/trips/${tripId}/motion`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            trip_id: tripId,
-            accel_variance: accelVariance,
-            gyro_variance: gyroVariance,
-          }),
-        });
+    if (isWeb) {
+      // Web demo: simulate motion updates
+      varianceIntervalRef.current = setInterval(async () => {
+        const accelVariance = Math.random() * 10;
+        const gyroVariance = Math.random() * 3;
         
-        const data = await response.json();
-        if (data.is_panic) {
-          setMotionStatus('panic_detected');
+        setMotionStatus('normal');
+        
+        try {
+          await fetch(`${API_URL}/api/trips/${tripId}/motion`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              trip_id: tripId,
+              accel_variance: accelVariance,
+              gyro_variance: gyroVariance,
+            }),
+          });
+        } catch (err) {
+          console.error('Failed to send motion data:', err);
         }
-      } catch (err) {
-        console.error('Failed to send motion data:', err);
-      }
-    }, VARIANCE_CHECK_INTERVAL);
+      }, VARIANCE_CHECK_INTERVAL);
+      return;
+    }
     
-    return varianceInterval;
+    try {
+      const { Accelerometer, Gyroscope } = require('expo-sensors');
+      
+      // Reset buffers
+      accelBuffer.current = [];
+      gyroBuffer.current = [];
+      
+      // Set update intervals (50ms = 20Hz)
+      Accelerometer.setUpdateInterval(50);
+      Gyroscope.setUpdateInterval(50);
+      
+      // Subscribe to accelerometer
+      accelSubscription.current = Accelerometer.addListener(({ x, y, z }: any) => {
+        const magnitude = Math.sqrt(x * x + y * y + z * z);
+        accelBuffer.current.push(magnitude);
+        if (accelBuffer.current.length > BUFFER_SIZE) {
+          accelBuffer.current.shift();
+        }
+      });
+      
+      // Subscribe to gyroscope
+      gyroSubscription.current = Gyroscope.addListener(({ x, y, z }: any) => {
+        const magnitude = Math.sqrt(x * x + y * y + z * z);
+        gyroBuffer.current.push(magnitude);
+        if (gyroBuffer.current.length > BUFFER_SIZE) {
+          gyroBuffer.current.shift();
+        }
+      });
+      
+      // Periodic variance check
+      varianceIntervalRef.current = setInterval(async () => {
+        if (accelBuffer.current.length < 10 || gyroBuffer.current.length < 10) return;
+        
+        const accelVariance = calculateVariance(accelBuffer.current);
+        const gyroVariance = calculateVariance(gyroBuffer.current);
+        
+        // Check if this indicates panic (thresholds from backend)
+        const isPanic = accelVariance > 15 && gyroVariance > 5;
+        
+        setMotionStatus(isPanic ? 'panic_detected' : 'normal');
+        
+        // Send to backend
+        try {
+          const response = await fetch(`${API_URL}/api/trips/${tripId}/motion`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              trip_id: tripId,
+              accel_variance: accelVariance,
+              gyro_variance: gyroVariance,
+            }),
+          });
+          
+          const data = await response.json();
+          if (data.is_panic) {
+            setMotionStatus('panic_detected');
+          }
+        } catch (err) {
+          console.error('Failed to send motion data:', err);
+        }
+      }, VARIANCE_CHECK_INTERVAL);
+    } catch (error) {
+      console.error('Motion tracking error:', error);
+    }
   };
 
   // Stop all tracking
@@ -231,11 +305,15 @@ export default function HomeScreen() {
       gyroSubscription.current.remove();
       gyroSubscription.current = null;
     }
+    if (varianceIntervalRef.current) {
+      clearInterval(varianceIntervalRef.current);
+      varianceIntervalRef.current = null;
+    }
   };
 
   // Handle Start Trip
   const handleStartTrip = async () => {
-    if (!locationPermission) {
+    if (!locationPermission && !isWeb) {
       await requestPermissions();
       return;
     }
@@ -345,6 +423,16 @@ export default function HomeScreen() {
         
         <Text style={styles.subtitle}>Autonomous Women Safety System</Text>
         
+        {/* Web Demo Notice */}
+        {isWeb && (
+          <View style={styles.webNotice}>
+            <Ionicons name="information-circle" size={20} color="#3498db" />
+            <Text style={styles.webNoticeText}>
+              Web demo mode - Use Expo Go app for full functionality
+            </Text>
+          </View>
+        )}
+        
         {/* Status Card */}
         <View style={styles.statusCard}>
           <View style={styles.statusRow}>
@@ -414,7 +502,7 @@ export default function HomeScreen() {
             </Text>
             <TextInput
               style={styles.phoneInput}
-              placeholder="Enter phone number"
+              placeholder="Enter phone number (e.g. +919876543210)"
               placeholderTextColor="#666"
               keyboardType="phone-pad"
               value={phoneInput}
@@ -554,6 +642,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#888',
     marginBottom: 24,
+  },
+  webNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a2a3a',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  webNoticeText: {
+    color: '#3498db',
+    fontSize: 12,
+    flex: 1,
   },
   statusCard: {
     backgroundColor: '#1a1a1a',
