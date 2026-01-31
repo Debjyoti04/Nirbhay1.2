@@ -391,6 +391,53 @@ export default function HomeScreen() {
     }
   };
 
+  // Handle user confirming they are safe (correct code entered)
+  const handleSafetyConfirmed = () => {
+    console.log('User confirmed safety with correct code');
+    setShowSafetyCheck(false);
+    setMotionStatus('normal');
+    setPendingPanicData(null);
+    Alert.alert('All Good!', 'Glad you are safe. Stay alert!');
+  };
+
+  // Handle triggering alert (wrong code, no response, or user says "No")
+  const handleTriggerAlert = async () => {
+    console.log('Triggering emergency alert!');
+    setShowSafetyCheck(false);
+    
+    if (!currentTrip) {
+      console.error('No active trip for alert');
+      return;
+    }
+    
+    try {
+      // Call the backend to trigger the alert
+      const response = await fetch(`${API_URL}/api/trips/${currentTrip.id}/test-alert`, {
+        method: 'POST',
+      });
+      
+      const result = await response.json();
+      console.log('Alert triggered:', result);
+      
+      setLastRiskRule('USER_SAFETY_CHECK_FAILED');
+      
+      if (result.sms_sent) {
+        Alert.alert(
+          'Alert Sent!',
+          `Emergency SMS has been sent to your guardian (${guardianPhone}) with your location.`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Alert Triggered', 'Emergency alert has been logged.');
+      }
+    } catch (error) {
+      console.error('Failed to trigger alert:', error);
+      Alert.alert('Error', 'Failed to send alert. Please call emergency services directly.');
+    }
+    
+    setPendingPanicData(null);
+  };
+
   // Handle Start Trip
   const handleStartTrip = async () => {
     if (!locationPermission && !isWeb) {
