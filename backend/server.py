@@ -123,7 +123,30 @@ class MotionInput(BaseModel):
 class GuardianUpdate(BaseModel):
     trip_id: str
     guardian_phone: Optional[str] = None
+    guardian_phone_2: Optional[str] = None
+    guardian_phone_3: Optional[str] = None
     guardian_fcm_token: Optional[str] = None
+
+# ===========================================
+# Geocoding Models
+# ===========================================
+
+class GeocodeRequest(BaseModel):
+    """Request to geocode a place name"""
+    place_name: str
+    limit: int = 5
+
+class GeocodeResult(BaseModel):
+    """Single geocoding result"""
+    name: str
+    display_name: str
+    lat: float
+    lng: float
+    type: str
+
+class GeocodeResponse(BaseModel):
+    """Response from geocoding"""
+    results: List[GeocodeResult]
 
 # ===========================================
 # Safe Route Models
@@ -133,8 +156,9 @@ class RouteRequest(BaseModel):
     """Request for safe route analysis"""
     origin_lat: float
     origin_lng: float
-    dest_lat: float
-    dest_lng: float
+    dest_lat: Optional[float] = None
+    dest_lng: Optional[float] = None
+    dest_place_name: Optional[str] = None  # Alternative to lat/lng
     travel_time: Optional[str] = None  # ISO format, defaults to now
 
 class SafetyFactor(BaseModel):
