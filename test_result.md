@@ -126,11 +126,14 @@ backend:
     file: "server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: true
         agent: "main"
         comment: "Implemented POST /api/chat/analyze endpoint. Uses Claude Sonnet via Emergent LLM Key to analyze chat screenshots for red flags. Detects love bombing, personal info requests, pressure tactics, isolation attempts, inappropriate content. Returns risk score and actionable advice."
+      - working: true
+        agent: "testing"
+        comment: "TESTED SUCCESSFULLY: Fixed UserMessage API issue with emergentintegrations library. All endpoint tests pass: response structure valid, risk_level/risk_score correct, red_flags array present, advisory and action_items provided, resources included. API returns proper JSON with safety analysis. Minor fix applied to UserMessage constructor - image handling now works correctly."
 
 frontend:
   - task: "Safe Routes Screen"
