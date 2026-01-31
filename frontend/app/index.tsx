@@ -503,11 +503,12 @@ export default function HomeScreen() {
   // Save guardian phone
   const saveGuardianPhone = async () => {
     if (!phoneInput || phoneInput.length < 10) {
-      Alert.alert('Invalid Phone', 'Please enter a valid phone number.');
+      Alert.alert('Invalid Phone', 'Please enter a valid phone number for the primary guardian.');
       return;
     }
     
-    setGuardianPhone(phoneInput);
+    // Save primary guardian
+    setGuardianPhone(phoneInput, 1);
     setShowPhoneInput(false);
     
     if (currentTrip) {
@@ -518,6 +519,8 @@ export default function HomeScreen() {
           body: JSON.stringify({
             trip_id: currentTrip.id,
             guardian_phone: phoneInput,
+            guardian_phone_2: guardianPhone2 || null,
+            guardian_phone_3: guardianPhone3 || null,
           }),
         });
       } catch (err) {
