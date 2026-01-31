@@ -15,6 +15,8 @@ export default function RootLayout() {
       >
         <Stack.Screen name="index" />
         <Stack.Screen name="debug" />
+        <Stack.Screen name="routes" />
+        <Stack.Screen name="chat-safety" />
       </Stack>
     </SafeAreaProvider>
   );
