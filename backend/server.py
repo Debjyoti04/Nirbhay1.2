@@ -895,6 +895,477 @@ async def test_alert(trip_id: str):
         "guardian_phone": trip.get('guardian_phone', 'not_set')
     }
 
+# ===========================================
+# Feature 1: Safe Route & Transport Suggestions
+# ===========================================
+
+def calculate_time_safety_score(hour: int) -> tuple:
+    """Calculate safety score based on time of day"""
+    if 6 <= hour < 10:  # Early morning
+        return 85, "Early morning - moderate activity, generally safe"
+    elif 10 <= hour < 18:  # Daytime
+        return 95, "Daytime - high public activity, safest time"
+    elif 18 <= hour < 21:  # Evening
+        return 75, "Evening - decreasing activity, stay alert"
+    elif 21 <= hour < 23:  # Late evening
+        return 55, "Late evening - low activity, exercise caution"
+    else:  # Night (23:00 - 6:00)
+        return 30, "Night time - minimal activity, avoid if possible"
+
+def calculate_area_safety(lat: float, lng: float) -> tuple:
+    """Simulate area safety based on location (would use real data in production)"""
+    # Simulate based on location hash for consistent results
+    location_hash = abs(hash(f"{lat:.4f},{lng:.4f}")) % 100
+    
+    if location_hash < 20:
+        return 60, "Mixed residential area - moderate safety"
+    elif location_hash < 50:
+        return 80, "Commercial area - good public presence"
+    elif location_hash < 70:
+        return 90, "Well-lit main road - high safety"
+    else:
+        return 75, "Residential area - generally safe"
+
+async def get_nearby_police_stations(lat: float, lng: float) -> List[dict]:
+    """Query OpenStreetMap for nearby police stations"""
+    try:
+        # Overpass API query for police stations within 2km
+        overpass_url = "https://overpass-api.de/api/interpreter"
+        query = f"""
+        [out:json][timeout:10];
+        (
+          node["amenity"="police"](around:2000,{lat},{lng});
+          way["amenity"="police"](around:2000,{lat},{lng});
+        );
+        out center;
+        """
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(overpass_url, data={"data": query}, timeout=15.0)
+            
+        if response.status_code == 200:
+            data = response.json()
+            stations = []
+            for element in data.get('elements', [])[:5]:  # Limit to 5
+                station_lat = element.get('lat') or element.get('center', {}).get('lat')
+                station_lng = element.get('lon') or element.get('center', {}).get('lon')
+                if station_lat and station_lng:
+                    distance = calculate_distance(lat, lng, station_lat, station_lng)
+                    stations.append({
+                        "name": element.get('tags', {}).get('name', 'Police Station'),
+                        "lat": station_lat,
+                        "lng": station_lng,
+                        "distance_m": round(distance)
+                    })
+            return sorted(stations, key=lambda x: x['distance_m'])
+        return []
+    except Exception as e:
+        logger.error(f"Error fetching police stations: {e}")
+        return []
+
+async def get_safe_spots(lat: float, lng: float) -> List[dict]:
+    """Get nearby safe spots (hospitals, police, fire stations, metro stations)"""
+    try:
+        overpass_url = "https://overpass-api.de/api/interpreter"
+        query = f"""
+        [out:json][timeout:10];
+        (
+          node["amenity"="police"](around:1500,{lat},{lng});
+          node["amenity"="hospital"](around:1500,{lat},{lng});
+          node["amenity"="fire_station"](around:1500,{lat},{lng});
+          node["station"="subway"](around:1500,{lat},{lng});
+          node["railway"="station"](around:1500,{lat},{lng});
+        );
+        out;
+        """
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(overpass_url, data={"data": query}, timeout=15.0)
+            
+        if response.status_code == 200:
+            data = response.json()
+            spots = []
+            for element in data.get('elements', [])[:10]:
+                spot_lat = element.get('lat')
+                spot_lng = element.get('lon')
+                tags = element.get('tags', {})
+                
+                spot_type = "safe_spot"
+                icon = "shield"
+                if tags.get('amenity') == 'police':
+                    spot_type = "police"
+                    icon = "shield-checkmark"
+                elif tags.get('amenity') == 'hospital':
+                    spot_type = "hospital"
+                    icon = "medical"
+                elif tags.get('amenity') == 'fire_station':
+                    spot_type = "fire_station"
+                    icon = "flame"
+                elif tags.get('station') == 'subway' or tags.get('railway') == 'station':
+                    spot_type = "metro"
+                    icon = "train"
+                
+                if spot_lat and spot_lng:
+                    distance = calculate_distance(lat, lng, spot_lat, spot_lng)
+                    spots.append({
+                        "name": tags.get('name', spot_type.replace('_', ' ').title()),
+                        "type": spot_type,
+                        "icon": icon,
+                        "lat": spot_lat,
+                        "lng": spot_lng,
+                        "distance_m": round(distance)
+                    })
+            return sorted(spots, key=lambda x: x['distance_m'])[:8]
+        return []
+    except Exception as e:
+        logger.error(f"Error fetching safe spots: {e}")
+        return []
+
+@api_router.post("/routes/analyze", response_model=RouteResponse)
+async def analyze_route_safety(request: RouteRequest):
+    """
+    Analyze route safety and provide transport recommendations.
+    Uses OpenStreetMap data for real location information.
+    """
+    # Determine travel time
+    if request.travel_time:
+        travel_datetime = datetime.fromisoformat(request.travel_time.replace('Z', ''))
+    else:
+        travel_datetime = datetime.utcnow()
+    
+    hour = travel_datetime.hour
+    
+    # Calculate safety factors
+    time_score, time_desc = calculate_time_safety_score(hour)
+    origin_area_score, origin_area_desc = calculate_area_safety(request.origin_lat, request.origin_lng)
+    dest_area_score, dest_area_desc = calculate_area_safety(request.dest_lat, request.dest_lng)
+    
+    # Get nearby police stations for safety boost
+    police_stations = await get_nearby_police_stations(
+        (request.origin_lat + request.dest_lat) / 2,
+        (request.origin_lng + request.dest_lng) / 2
+    )
+    police_score = min(90, 50 + len(police_stations) * 10) if police_stations else 50
+    police_desc = f"{len(police_stations)} police stations within 2km" if police_stations else "No police stations nearby"
+    
+    # Calculate route distance
+    route_distance = calculate_distance(
+        request.origin_lat, request.origin_lng,
+        request.dest_lat, request.dest_lng
+    )
+    
+    # Lighting score (simulated based on time)
+    if 6 <= hour < 19:
+        lighting_score = 95
+        lighting_desc = "Good natural lighting"
+    elif 19 <= hour < 21:
+        lighting_score = 70
+        lighting_desc = "Transitioning to artificial lighting"
+    else:
+        lighting_score = 45
+        lighting_desc = "Dependent on street lighting"
+    
+    # Crowd density (simulated based on time and day)
+    weekday = travel_datetime.weekday()
+    if weekday < 5:  # Weekday
+        if 8 <= hour < 10 or 17 <= hour < 20:
+            crowd_score = 90
+            crowd_desc = "Peak hours - high public presence"
+        elif 10 <= hour < 17:
+            crowd_score = 75
+            crowd_desc = "Regular hours - moderate activity"
+        else:
+            crowd_score = 40
+            crowd_desc = "Off-peak - limited public presence"
+    else:  # Weekend
+        if 10 <= hour < 22:
+            crowd_score = 70
+            crowd_desc = "Weekend activity - variable crowds"
+        else:
+            crowd_score = 35
+            crowd_desc = "Late night weekend - sparse activity"
+    
+    # Build safety factors
+    factors = [
+        SafetyFactor(name="Time of Day", score=time_score, description=time_desc, icon="time"),
+        SafetyFactor(name="Crowd Density", score=crowd_score, description=crowd_desc, icon="people"),
+        SafetyFactor(name="Lighting", score=lighting_score, description=lighting_desc, icon="bulb"),
+        SafetyFactor(name="Police Presence", score=police_score, description=police_desc, icon="shield"),
+        SafetyFactor(name="Area Safety", score=(origin_area_score + dest_area_score) // 2, 
+                    description=f"Origin: {origin_area_desc}", icon="location"),
+    ]
+    
+    # Calculate overall score (weighted average)
+    weights = [0.25, 0.2, 0.15, 0.2, 0.2]
+    overall_score = sum(f.score * w for f, w in zip(factors, weights))
+    
+    # Determine safety level
+    if overall_score >= 80:
+        safety_level = "safe"
+    elif overall_score >= 60:
+        safety_level = "moderate"
+    else:
+        safety_level = "risky"
+    
+    # Transport recommendations based on distance and safety
+    transport_modes = []
+    
+    # Walking
+    if route_distance < 2000:
+        walk_time = int(route_distance / 80)  # ~5 km/h
+        walk_safety = overall_score - (10 if hour >= 21 or hour < 6 else 0)
+        transport_modes.append(TransportMode(
+            mode="walk",
+            safety_score=max(0, walk_safety),
+            estimated_time=walk_time,
+            recommendation="Safe for short distance" if walk_safety > 70 else "Consider alternatives at night",
+            icon="walk"
+        ))
+    
+    # Metro/Public transit
+    if route_distance > 1000:
+        metro_time = int(route_distance / 500) + 10  # Including wait time
+        metro_safety = min(95, overall_score + 15)  # Metro is generally safer
+        transport_modes.append(TransportMode(
+            mode="metro",
+            safety_score=metro_safety,
+            estimated_time=metro_time,
+            recommendation="Recommended - safe and monitored",
+            icon="train"
+        ))
+    
+    # Bus
+    bus_time = int(route_distance / 300) + 15
+    bus_safety = overall_score + 5
+    transport_modes.append(TransportMode(
+        mode="bus",
+        safety_score=min(90, bus_safety),
+        estimated_time=bus_time,
+        recommendation="Good option with regular stops",
+        icon="bus"
+    ))
+    
+    # Auto/Rickshaw
+    auto_time = int(route_distance / 400) + 5
+    auto_safety = overall_score - 5 if hour >= 22 or hour < 6 else overall_score
+    transport_modes.append(TransportMode(
+        mode="auto",
+        safety_score=max(40, auto_safety),
+        estimated_time=auto_time,
+        recommendation="Share ride details with guardian" if hour >= 21 else "Convenient for medium distances",
+        icon="car"
+    ))
+    
+    # Cab (app-based)
+    cab_time = int(route_distance / 500) + 8
+    cab_safety = overall_score + 10  # App-based cabs have tracking
+    transport_modes.append(TransportMode(
+        mode="cab",
+        safety_score=min(95, cab_safety),
+        estimated_time=cab_time,
+        recommendation="Best for night travel - share trip with contacts",
+        icon="car-sport"
+    ))
+    
+    # Sort by safety score
+    transport_modes.sort(key=lambda x: x.safety_score, reverse=True)
+    
+    # Generate route points (simple straight line for now)
+    route_points = [
+        {"lat": request.origin_lat, "lng": request.origin_lng, "type": "origin"},
+        {"lat": request.dest_lat, "lng": request.dest_lng, "type": "destination"}
+    ]
+    
+    # Get nearby safe spots
+    nearby_safe_spots = await get_safe_spots(
+        (request.origin_lat + request.dest_lat) / 2,
+        (request.origin_lng + request.dest_lng) / 2
+    )
+    
+    # Generate recommendations
+    recommendations = []
+    if safety_level == "risky":
+        recommendations.append("Consider postponing travel if possible")
+        recommendations.append("Use app-based cab with trip sharing enabled")
+        recommendations.append("Keep emergency contacts readily accessible")
+    elif safety_level == "moderate":
+        recommendations.append("Stay on well-lit main roads")
+        recommendations.append("Share your live location with a trusted contact")
+        recommendations.append("Prefer public transport or verified cabs")
+    else:
+        recommendations.append("Route appears safe - enjoy your travel!")
+        recommendations.append("Stay aware of surroundings as always")
+    
+    if hour >= 21 or hour < 6:
+        recommendations.append("Avoid isolated areas and shortcuts")
+        recommendations.append("Keep your phone charged and accessible")
+    
+    return RouteResponse(
+        overall_safety_score=round(overall_score, 1),
+        safety_level=safety_level,
+        factors=factors,
+        transport_modes=transport_modes,
+        route_points=route_points,
+        recommendations=recommendations,
+        nearby_safe_spots=nearby_safe_spots
+    )
+
+# ===========================================
+# Feature 2: Contextual Safety Guidance (Chat Analysis)
+# ===========================================
+
+CHAT_ANALYSIS_SYSTEM_PROMPT = """You are a safety advisor AI specialized in detecting potential grooming, manipulation, and social engineering patterns in conversations. Your role is to protect users, especially young people and vulnerable individuals, from online predators and scammers.
+
+Analyze the chat screenshot provided and look for these specific red flags:
+
+1. **LOVE_BOMBING**: Excessive compliments, declarations of love too soon, overwhelming attention
+   - Examples: "You're the most beautiful person I've ever seen", "I've never felt this way about anyone", "You're my soulmate"
+
+2. **PERSONAL_INFO_REQUEST**: Requests for sensitive personal information
+   - Examples: Asking for home address, school/workplace, photos, financial details, ID documents
+
+3. **PRESSURE_TACTICS**: Creating urgency, guilt-tripping, emotional manipulation
+   - Examples: "If you loved me you would...", "I need this now", "You're the only one who can help"
+
+4. **ISOLATION_ATTEMPTS**: Trying to separate victim from support network
+   - Examples: "Don't tell anyone about us", "Your friends don't understand", "This is our secret"
+
+5. **INAPPROPRIATE_CONTENT**: Age-inappropriate discussions, sexual content, explicit requests
+   - Examples: Sexual comments, requests for intimate photos, inappropriate questions about body
+
+For each red flag detected, provide:
+- The type of red flag
+- Severity (low/medium/high/critical)
+- The specific text or pattern that triggered this detection
+- A clear explanation of why this is concerning
+
+Also provide:
+- Overall risk level (safe/low_risk/moderate_risk/high_risk/dangerous)
+- Risk score (0-100)
+- Practical advisory for the user
+- Specific action items
+
+Respond in JSON format with this structure:
+{
+    "risk_level": "string",
+    "risk_score": number,
+    "red_flags": [
+        {
+            "type": "string",
+            "severity": "string",
+            "evidence": "string",
+            "explanation": "string"
+        }
+    ],
+    "advisory": "string",
+    "action_items": ["string"]
+}
+
+Be thorough but avoid false positives. Consider context and relationship dynamics. Prioritize user safety while being balanced in assessment."""
+
+@api_router.post("/chat/analyze", response_model=ChatAnalysisResponse)
+async def analyze_chat_safety(request: ChatAnalysisRequest):
+    """
+    Analyze a chat screenshot for potential grooming or manipulation patterns.
+    Uses Claude Sonnet AI for intelligent pattern detection.
+    """
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(
+            status_code=500, 
+            detail="AI service not configured. Please set EMERGENT_LLM_KEY."
+        )
+    
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        
+        # Create chat instance with Claude Sonnet
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"chat-analysis-{uuid.uuid4()}",
+            system_message=CHAT_ANALYSIS_SYSTEM_PROMPT
+        ).with_model("anthropic", "claude-sonnet-4-20250514")
+        
+        # Create image content from base64
+        image_content = ImageContent(image_base64=request.image_base64)
+        
+        # Build the message
+        analysis_prompt = "Please analyze this chat screenshot for safety concerns."
+        if request.context:
+            analysis_prompt += f"\n\nAdditional context from user: {request.context}"
+        
+        user_message = UserMessage(
+            text=analysis_prompt,
+            image_contents=[image_content]
+        )
+        
+        # Send for analysis
+        response = await chat.send_message(user_message)
+        
+        # Parse the JSON response
+        import json
+        
+        # Try to extract JSON from the response
+        response_text = response.strip()
+        
+        # Handle if response is wrapped in markdown code blocks
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in response_text:
+            response_text = response_text.split("```")[1].split("```")[0].strip()
+        
+        try:
+            analysis_data = json.loads(response_text)
+        except json.JSONDecodeError:
+            # If JSON parsing fails, create a default safe response
+            logger.warning(f"Failed to parse AI response as JSON: {response_text[:200]}")
+            analysis_data = {
+                "risk_level": "low_risk",
+                "risk_score": 25,
+                "red_flags": [],
+                "advisory": "Unable to fully analyze the image. Please ensure it's a clear chat screenshot.",
+                "action_items": ["Try uploading a clearer screenshot", "If concerned, trust your instincts and speak to a trusted adult"]
+            }
+        
+        # Build red flags list
+        red_flags = []
+        for flag in analysis_data.get('red_flags', []):
+            red_flags.append(RedFlag(
+                type=flag.get('type', 'unknown'),
+                severity=flag.get('severity', 'medium'),
+                evidence=flag.get('evidence', 'Pattern detected'),
+                explanation=flag.get('explanation', 'Potential concern identified')
+            ))
+        
+        # Add helpful resources
+        resources = [
+            {"name": "Childline India", "contact": "1098", "type": "helpline"},
+            {"name": "Women Helpline", "contact": "181", "type": "helpline"},
+            {"name": "Cyber Crime Portal", "url": "https://cybercrime.gov.in", "type": "website"},
+            {"name": "National Commission for Women", "contact": "7827-170-170", "type": "helpline"}
+        ]
+        
+        return ChatAnalysisResponse(
+            risk_level=analysis_data.get('risk_level', 'low_risk'),
+            risk_score=analysis_data.get('risk_score', 25),
+            red_flags=red_flags,
+            advisory=analysis_data.get('advisory', 'Stay alert and trust your instincts.'),
+            action_items=analysis_data.get('action_items', ['If something feels wrong, talk to a trusted adult']),
+            resources=resources
+        )
+        
+    except ImportError as e:
+        logger.error(f"Failed to import emergentintegrations: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="AI service not available. Please try again later."
+        )
+    except Exception as e:
+        logger.error(f"Chat analysis error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis failed: {str(e)}"
+        )
+
 # Include the router in the main app
 app.include_router(api_router)
 
