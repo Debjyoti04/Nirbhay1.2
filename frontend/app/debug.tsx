@@ -160,12 +160,12 @@ export default function DebugScreen() {
                   </Text>
                 </View>
                 <View style={styles.row}>
-                  <Text style={styles.label}>MSG91 SMS:</Text>
+                  <Text style={styles.label}>Fast2SMS:</Text>
                   <Text style={[
                     styles.value,
-                    { color: healthStatus.services?.msg91 === 'configured' ? '#2ed573' : '#f39c12' }
+                    { color: healthStatus.services?.fast2sms === 'configured' ? '#2ed573' : '#f39c12' }
                   ]}>
-                    {healthStatus.services?.msg91 || 'N/A'}
+                    {healthStatus.services?.fast2sms || 'N/A'}
                   </Text>
                 </View>
               </>
