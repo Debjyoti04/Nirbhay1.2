@@ -341,10 +341,19 @@ export default function HomeScreen() {
         
         console.log(`Motion: accel=${accelVariance.toFixed(2)}, gyro=${gyroVariance.toFixed(2)}, panic=${isPanic}`);
         
-        setMotionStatus(isPanic ? 'panic_detected' : 'normal');
+        if (isPanic && !showSafetyCheck) {
+          // Show safety check modal instead of directly triggering alert
+          setMotionStatus('panic_detected');
+          setPendingPanicData({ accelVariance, gyroVariance });
+          setShowSafetyCheck(true);
+          console.log('Panic detected! Showing safety check modal...');
+        } else if (!isPanic) {
+          setMotionStatus('normal');
+        }
         
+        // Still send motion data to backend for logging
         try {
-          const response = await fetch(`${API_URL}/api/trips/${tripId}/motion`, {
+          await fetch(`${API_URL}/api/trips/${tripId}/motion`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -353,11 +362,6 @@ export default function HomeScreen() {
               gyro_variance: gyroVariance,
             }),
           });
-          
-          const data = await response.json();
-          if (data.is_panic) {
-            setMotionStatus('panic_detected');
-          }
         } catch (err) {
           console.error('Failed to send motion data:', err);
         }
