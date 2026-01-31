@@ -261,10 +261,6 @@ export default function HomeScreen() {
       };
     }
   };
-    } catch (error) {
-      console.error('Location tracking error:', error);
-    }
-  };
 
   // Start motion tracking
   const startMotionTracking = async (tripId: string) => {
