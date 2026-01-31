@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { WebView } from 'react-native-webview';
+import * as Location from 'expo-location';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
@@ -51,66 +52,142 @@ interface RouteAnalysis {
   nearby_safe_spots: SafeSpot[];
 }
 
-// Common locations for quick selection
-const QUICK_LOCATIONS = [
-  { name: "Connaught Place", lat: 28.6315, lng: 77.2167 },
-  { name: "India Gate", lat: 28.6129, lng: 77.2295 },
-  { name: "Hauz Khas", lat: 28.5494, lng: 77.2001 },
-  { name: "Saket", lat: 28.5245, lng: 77.2066 },
-  { name: "Noida Sec 18", lat: 28.5706, lng: 77.3219 },
-];
+interface GeocodeResult {
+  name: string;
+  display_name: string;
+  lat: number;
+  lng: number;
+  type: string;
+}
 
 export default function SafeRoutesScreen() {
-  const [originLat, setOriginLat] = useState('28.6139');
-  const [originLng, setOriginLng] = useState('77.2090');
-  const [destLat, setDestLat] = useState('28.6315');
-  const [destLng, setDestLng] = useState('77.2167');
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  
+  const [destinationText, setDestinationText] = useState('');
+  const [searchResults, setSearchResults] = useState<GeocodeResult[]>([]);
+  const [selectedDestination, setSelectedDestination] = useState<GeocodeResult | null>(null);
+  const [searching, setSearching] = useState(false);
+  
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<RouteAnalysis | null>(null);
-  const [showQuickPick, setShowQuickPick] = useState<'origin' | 'dest' | null>(null);
+
+  // Get current location on mount
+  useEffect(() => {
+    getCurrentLocation();
+  }, []);
+
+  const getCurrentLocation = async () => {
+    setLocationLoading(true);
+    setLocationError(null);
+    
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLocationError('Location permission denied');
+        setLocationLoading(false);
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      
+      setCurrentLocation({
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+      });
+    } catch (error) {
+      console.error('Location error:', error);
+      setLocationError('Could not get current location');
+      // Set default Delhi location as fallback
+      setCurrentLocation({ lat: 28.6139, lng: 77.2090 });
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  // Search for places with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (destinationText.length >= 3) {
+        searchPlaces(destinationText);
+      } else {
+        setSearchResults([]);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [destinationText]);
+
+  const searchPlaces = async (query: string) => {
+    setSearching(true);
+    try {
+      const response = await fetch(
+        `${API_URL}/api/geocode/search?q=${encodeURIComponent(query)}&limit=5`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data.results || []);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const selectDestination = (result: GeocodeResult) => {
+    setSelectedDestination(result);
+    setDestinationText(result.name);
+    setSearchResults([]);
+  };
 
   const analyzeRoute = async () => {
-    if (!originLat || !originLng || !destLat || !destLng) {
-      Alert.alert('Missing Information', 'Please enter both origin and destination coordinates.');
+    if (!currentLocation) {
+      Alert.alert('Location Required', 'Please wait for your current location or tap to refresh.');
+      return;
+    }
+
+    if (!selectedDestination && destinationText.length < 3) {
+      Alert.alert('Destination Required', 'Please enter a destination.');
       return;
     }
 
     setLoading(true);
     try {
+      const requestBody: any = {
+        origin_lat: currentLocation.lat,
+        origin_lng: currentLocation.lng,
+      };
+
+      if (selectedDestination) {
+        requestBody.dest_lat = selectedDestination.lat;
+        requestBody.dest_lng = selectedDestination.lng;
+      } else {
+        requestBody.dest_place_name = destinationText;
+      }
+
       const response = await fetch(`${API_URL}/api/routes/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          origin_lat: parseFloat(originLat),
-          origin_lng: parseFloat(originLng),
-          dest_lat: parseFloat(destLat),
-          dest_lng: parseFloat(destLng),
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to analyze route');
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to analyze route');
       }
 
       const data = await response.json();
       setAnalysis(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Route analysis error:', error);
-      Alert.alert('Error', 'Failed to analyze route. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to analyze route. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const selectQuickLocation = (location: typeof QUICK_LOCATIONS[0]) => {
-    if (showQuickPick === 'origin') {
-      setOriginLat(location.lat.toString());
-      setOriginLng(location.lng.toString());
-    } else if (showQuickPick === 'dest') {
-      setDestLat(location.lat.toString());
-      setDestLng(location.lng.toString());
-    }
-    setShowQuickPick(null);
   };
 
   const getSafetyColor = (level: string) => {
@@ -148,9 +225,9 @@ export default function SafeRoutesScreen() {
   };
 
   const renderMapHtml = () => {
-    if (!analysis) return '';
+    if (!analysis || !currentLocation) return '';
     
-    const origin = analysis.route_points[0];
+    const origin = { lat: currentLocation.lat, lng: currentLocation.lng };
     const dest = analysis.route_points[1];
     const safeSpots = analysis.nearby_safe_spots || [];
     
@@ -175,7 +252,7 @@ export default function SafeRoutesScreen() {
           // Origin marker (green)
           L.circleMarker([${origin.lat}, ${origin.lng}], {
             radius: 12, fillColor: '#2ed573', color: '#fff', weight: 3, fillOpacity: 1
-          }).addTo(map).bindPopup('Start');
+          }).addTo(map).bindPopup('Your Location');
           
           // Destination marker (red)
           L.circleMarker([${dest.lat}, ${dest.lng}], {
@@ -203,7 +280,7 @@ export default function SafeRoutesScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -217,91 +294,93 @@ export default function SafeRoutesScreen() {
 
         {/* Input Section */}
         <View style={styles.inputSection}>
-          {/* Origin */}
+          {/* Current Location (From) */}
           <View style={styles.inputGroup}>
             <View style={styles.inputLabel}>
-              <Ionicons name="location" size={20} color="#2ed573" />
-              <Text style={styles.labelText}>From</Text>
-              <TouchableOpacity onPress={() => setShowQuickPick('origin')}>
-                <Text style={styles.quickPickText}>Quick Pick</Text>
-              </TouchableOpacity>
+              <Ionicons name="navigate" size={20} color="#2ed573" />
+              <Text style={styles.labelText}>From (Current Location)</Text>
             </View>
-            <View style={styles.coordRow}>
-              <TextInput
-                style={styles.coordInput}
-                placeholder="Latitude"
-                placeholderTextColor="#666"
-                value={originLat}
-                onChangeText={setOriginLat}
-                keyboardType="decimal-pad"
-              />
-              <TextInput
-                style={styles.coordInput}
-                placeholder="Longitude"
-                placeholderTextColor="#666"
-                value={originLng}
-                onChangeText={setOriginLng}
-                keyboardType="decimal-pad"
-              />
-            </View>
+            <TouchableOpacity 
+              style={styles.locationBox}
+              onPress={getCurrentLocation}
+              disabled={locationLoading}
+            >
+              {locationLoading ? (
+                <View style={styles.locationContent}>
+                  <ActivityIndicator size="small" color="#2ed573" />
+                  <Text style={styles.locationText}>Getting location...</Text>
+                </View>
+              ) : currentLocation ? (
+                <View style={styles.locationContent}>
+                  <Ionicons name="checkmark-circle" size={20} color="#2ed573" />
+                  <Text style={styles.locationText}>
+                    {currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)}
+                  </Text>
+                  <Ionicons name="refresh" size={18} color="#888" />
+                </View>
+              ) : (
+                <View style={styles.locationContent}>
+                  <Ionicons name="alert-circle" size={20} color="#ff4757" />
+                  <Text style={styles.locationTextError}>
+                    {locationError || 'Tap to get location'}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
 
-          {/* Destination */}
+          {/* Destination (To) */}
           <View style={styles.inputGroup}>
             <View style={styles.inputLabel}>
               <Ionicons name="flag" size={20} color="#ff4757" />
-              <Text style={styles.labelText}>To</Text>
-              <TouchableOpacity onPress={() => setShowQuickPick('dest')}>
-                <Text style={styles.quickPickText}>Quick Pick</Text>
-              </TouchableOpacity>
+              <Text style={styles.labelText}>To (Destination)</Text>
             </View>
-            <View style={styles.coordRow}>
+            <View style={styles.searchContainer}>
               <TextInput
-                style={styles.coordInput}
-                placeholder="Latitude"
+                style={styles.searchInput}
+                placeholder="Search for a place..."
                 placeholderTextColor="#666"
-                value={destLat}
-                onChangeText={setDestLat}
-                keyboardType="decimal-pad"
+                value={destinationText}
+                onChangeText={(text) => {
+                  setDestinationText(text);
+                  setSelectedDestination(null);
+                }}
               />
-              <TextInput
-                style={styles.coordInput}
-                placeholder="Longitude"
-                placeholderTextColor="#666"
-                value={destLng}
-                onChangeText={setDestLng}
-                keyboardType="decimal-pad"
-              />
+              {searching && (
+                <ActivityIndicator size="small" color="#3498db" style={styles.searchSpinner} />
+              )}
+              {selectedDestination && (
+                <Ionicons name="checkmark-circle" size={20} color="#2ed573" style={styles.selectedIcon} />
+              )}
             </View>
+            
+            {/* Search Results Dropdown */}
+            {searchResults.length > 0 && (
+              <View style={styles.searchResults}>
+                {searchResults.map((result, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.searchResultItem}
+                    onPress={() => selectDestination(result)}
+                  >
+                    <Ionicons name="location-outline" size={18} color="#3498db" />
+                    <View style={styles.resultTextContainer}>
+                      <Text style={styles.resultName}>{result.name}</Text>
+                      <Text style={styles.resultAddress} numberOfLines={1}>
+                        {result.display_name}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
-
-          {/* Quick Pick Modal */}
-          {showQuickPick && (
-            <View style={styles.quickPickModal}>
-              <Text style={styles.quickPickTitle}>Select Location</Text>
-              {QUICK_LOCATIONS.map((loc, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.quickPickItem}
-                  onPress={() => selectQuickLocation(loc)}
-                >
-                  <Text style={styles.quickPickItemText}>{loc.name}</Text>
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity
-                style={styles.quickPickCancel}
-                onPress={() => setShowQuickPick(null)}
-              >
-                <Text style={styles.quickPickCancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          )}
 
           {/* Analyze Button */}
           <TouchableOpacity
-            style={styles.analyzeButton}
+            style={[styles.analyzeButton, (!currentLocation || (!selectedDestination && destinationText.length < 3)) && styles.analyzeButtonDisabled]}
             onPress={analyzeRoute}
-            disabled={loading}
+            disabled={loading || !currentLocation || (!selectedDestination && destinationText.length < 3)}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
@@ -465,50 +544,71 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
-  quickPickText: {
-    color: '#3498db',
-    fontSize: 14,
-  },
-  coordRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  coordInput: {
-    flex: 1,
+  locationBox: {
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
     padding: 14,
+  },
+  locationContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  locationText: {
+    color: '#fff',
+    fontSize: 14,
+    flex: 1,
+  },
+  locationTextError: {
+    color: '#ff4757',
+    fontSize: 14,
+    flex: 1,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 14,
     color: '#fff',
     fontSize: 14,
   },
-  quickPickModal: {
+  searchSpinner: {
+    marginLeft: 8,
+  },
+  selectedIcon: {
+    marginLeft: 8,
+  },
+  searchResults: {
     backgroundColor: '#1a1a1a',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 12,
+    marginTop: 8,
+    overflow: 'hidden',
   },
-  quickPickTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  quickPickItem: {
-    paddingVertical: 12,
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
+    gap: 10,
   },
-  quickPickItemText: {
+  resultTextContainer: {
+    flex: 1,
+  },
+  resultName: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: '600',
   },
-  quickPickCancel: {
-    paddingTop: 12,
-    alignItems: 'center',
-  },
-  quickPickCancelText: {
+  resultAddress: {
     color: '#888',
-    fontSize: 14,
+    fontSize: 12,
+    marginTop: 2,
   },
   analyzeButton: {
     flexDirection: 'row',
@@ -519,6 +619,9 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 8,
     marginTop: 8,
+  },
+  analyzeButtonDisabled: {
+    backgroundColor: '#555',
   },
   analyzeButtonText: {
     color: '#fff',
