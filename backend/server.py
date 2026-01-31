@@ -1268,50 +1268,42 @@ Be thorough but avoid false positives. Consider context and relationship dynamic
 async def analyze_chat_safety(request: ChatAnalysisRequest):
     """
     Analyze a chat screenshot for potential grooming or manipulation patterns.
-    Uses Claude Sonnet AI for intelligent pattern detection.
+    Uses Google Gemini AI for intelligent pattern detection.
     """
-    if not EMERGENT_LLM_KEY:
+    if not GEMINI_API_KEY:
         raise HTTPException(
             status_code=500, 
-            detail="AI service not configured. Please set EMERGENT_LLM_KEY."
+            detail="AI service not configured. Please set GEMINI_API_KEY."
         )
     
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        import google.generativeai as genai
+        import json
         
-        # Create chat instance with Claude Sonnet
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"chat-analysis-{uuid.uuid4()}",
-            system_message=CHAT_ANALYSIS_SYSTEM_PROMPT
-        ).with_model("anthropic", "claude-sonnet-4-20250514")
+        # Configure Gemini
+        genai.configure(api_key=GEMINI_API_KEY)
+        
+        # Create the model
+        model = genai.GenerativeModel('gemini-2.0-flash')
         
         # Build the message
-        analysis_prompt = "Please analyze this chat screenshot for safety concerns."
+        analysis_prompt = f"""{CHAT_ANALYSIS_SYSTEM_PROMPT}
+
+Please analyze this chat screenshot for safety concerns."""
         if request.context:
             analysis_prompt += f"\n\nAdditional context from user: {request.context}"
         
-        # Create image content from base64
-        # Try different approach - pass image as part of text message
-        user_message = UserMessage(
-            text=analysis_prompt
-        )
+        # Prepare image data
+        image_data = {
+            "mime_type": "image/png",
+            "data": request.image_base64
+        }
         
-        # Add image as attachment if supported
-        try:
-            user_message.image_base64 = request.image_base64
-        except:
-            # If image attachment not supported, continue with text only
-            pass
-        
-        # Send for analysis
-        response = await chat.send_message(user_message)
+        # Send for analysis with image
+        response = model.generate_content([analysis_prompt, image_data])
         
         # Parse the JSON response
-        import json
-        
-        # Try to extract JSON from the response
-        response_text = response.strip()
+        response_text = response.text.strip()
         
         # Handle if response is wrapped in markdown code blocks
         if "```json" in response_text:
