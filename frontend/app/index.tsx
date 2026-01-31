@@ -693,6 +693,16 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
         
+        {!guardianPhone && !showPhoneInput && (
+          <TouchableOpacity 
+            style={styles.setGuardianButton}
+            onPress={() => setShowPhoneInput(true)}
+          >
+            <Ionicons name="person-add" size={20} color="#fff" />
+            <Text style={styles.setGuardianText}>Set Guardian Numbers</Text>
+          </TouchableOpacity>
+        )}
+        
         <TouchableOpacity
           style={[
             styles.mainButton,
