@@ -1046,12 +1046,81 @@ async def get_safe_spots(lat: float, lng: float) -> List[dict]:
         logger.error(f"Error fetching safe spots: {e}")
         return []
 
+async def geocode_place(place_name: str, limit: int = 5) -> List[GeocodeResult]:
+    """Geocode a place name using OpenStreetMap Nominatim API"""
+    try:
+        nominatim_url = "https://nominatim.openstreetmap.org/search"
+        params = {
+            "q": place_name,
+            "format": "json",
+            "limit": limit,
+            "countrycodes": "in",  # Prioritize India
+            "addressdetails": 1
+        }
+        headers = {
+            "User-Agent": "NirbhayApp/1.0 (Women Safety App)"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(nominatim_url, params=params, headers=headers, timeout=10.0)
+            
+        if response.status_code == 200:
+            data = response.json()
+            results = []
+            for item in data:
+                results.append(GeocodeResult(
+                    name=item.get('name', place_name),
+                    display_name=item.get('display_name', ''),
+                    lat=float(item.get('lat', 0)),
+                    lng=float(item.get('lon', 0)),
+                    type=item.get('type', 'unknown')
+                ))
+            return results
+        return []
+    except Exception as e:
+        logger.error(f"Geocoding error: {e}")
+        return []
+
+@api_router.post("/geocode", response_model=GeocodeResponse)
+async def geocode_location(request: GeocodeRequest):
+    """
+    Geocode a place name to coordinates using OpenStreetMap Nominatim.
+    Returns up to 5 matching locations.
+    """
+    results = await geocode_place(request.place_name, request.limit)
+    return GeocodeResponse(results=results)
+
+@api_router.get("/geocode/search")
+async def geocode_search(q: str, limit: int = 5):
+    """
+    Quick geocode search endpoint for autocomplete.
+    """
+    results = await geocode_place(q, limit)
+    return {"results": [r.dict() for r in results]}
+
 @api_router.post("/routes/analyze", response_model=RouteResponse)
 async def analyze_route_safety(request: RouteRequest):
     """
     Analyze route safety and provide transport recommendations.
     Uses OpenStreetMap data for real location information.
+    Supports both lat/lng and place name for destination.
     """
+    # Handle destination - either lat/lng or place name
+    dest_lat = request.dest_lat
+    dest_lng = request.dest_lng
+    
+    if request.dest_place_name and (dest_lat is None or dest_lng is None):
+        # Geocode the destination place name
+        geocode_results = await geocode_place(request.dest_place_name, 1)
+        if geocode_results:
+            dest_lat = geocode_results[0].lat
+            dest_lng = geocode_results[0].lng
+        else:
+            raise HTTPException(status_code=400, detail=f"Could not find location: {request.dest_place_name}")
+    
+    if dest_lat is None or dest_lng is None:
+        raise HTTPException(status_code=400, detail="Destination coordinates or place name required")
+    
     # Determine travel time
     if request.travel_time:
         travel_datetime = datetime.fromisoformat(request.travel_time.replace('Z', ''))
