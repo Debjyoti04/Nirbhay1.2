@@ -1352,10 +1352,10 @@ Please analyze this chat screenshot for safety concerns."""
         )
         
     except ImportError as e:
-        logger.error(f"Failed to import emergentintegrations: {e}")
+        logger.error(f"Failed to import google-generativeai: {e}")
         raise HTTPException(
             status_code=500,
-            detail="AI service not available. Please try again later."
+            detail="AI service not available. Please install google-generativeai package."
         )
     except Exception as e:
         logger.error(f"Chat analysis error: {str(e)}")
