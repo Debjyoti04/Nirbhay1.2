@@ -1295,7 +1295,7 @@ async def analyze_chat_safety(request: ChatAnalysisRequest):
         
         user_message = UserMessage(
             text=analysis_prompt,
-            image_contents=[image_content]
+            images=[image_content]
         )
         
         # Send for analysis
