@@ -1132,12 +1132,12 @@ async def analyze_route_safety(request: RouteRequest):
     # Calculate safety factors
     time_score, time_desc = calculate_time_safety_score(hour)
     origin_area_score, origin_area_desc = calculate_area_safety(request.origin_lat, request.origin_lng)
-    dest_area_score, dest_area_desc = calculate_area_safety(request.dest_lat, request.dest_lng)
+    dest_area_score, dest_area_desc = calculate_area_safety(dest_lat, dest_lng)
     
     # Get nearby police stations for safety boost
     police_stations = await get_nearby_police_stations(
-        (request.origin_lat + request.dest_lat) / 2,
-        (request.origin_lng + request.dest_lng) / 2
+        (request.origin_lat + dest_lat) / 2,
+        (request.origin_lng + dest_lng) / 2
     )
     police_score = min(90, 50 + len(police_stations) * 10) if police_stations else 50
     police_desc = f"{len(police_stations)} police stations within 2km" if police_stations else "No police stations nearby"
@@ -1145,7 +1145,7 @@ async def analyze_route_safety(request: RouteRequest):
     # Calculate route distance
     route_distance = calculate_distance(
         request.origin_lat, request.origin_lng,
-        request.dest_lat, request.dest_lng
+        dest_lat, dest_lng
     )
     
     # Lighting score (simulated based on time)
