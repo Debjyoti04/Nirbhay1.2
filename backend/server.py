@@ -408,7 +408,7 @@ async def health_check():
         "services": {
             "database": "connected",
             "unwired_labs": "configured" if UNWIRED_LABS_API_KEY != 'demo_key' else "demo_mode",
-            "msg91": "configured" if MSG91_AUTH_KEY != 'demo_key' else "demo_mode"
+            "fast2sms": "configured" if FAST2SMS_API_KEY != 'demo_key' else "demo_mode"
         }
     }
 
