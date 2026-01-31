@@ -935,6 +935,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  guardianInputRow: {
+    marginBottom: 12,
+  },
+  guardianLabel: {
+    color: '#888',
+    fontSize: 12,
+    marginBottom: 6,
+  },
   guardianCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -944,10 +952,17 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 12,
   },
-  guardianText: {
+  guardianTextContainer: {
     flex: 1,
+  },
+  guardianText: {
     color: '#fff',
     fontSize: 14,
+  },
+  guardianTextSecondary: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 4,
   },
   mainButton: {
     borderRadius: 20,
