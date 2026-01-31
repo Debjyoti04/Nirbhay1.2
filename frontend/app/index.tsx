@@ -612,18 +612,50 @@ export default function HomeScreen() {
         
         {showPhoneInput && (
           <View style={styles.phoneInputCard}>
-            <Text style={styles.phoneInputTitle}>Guardian Phone Number</Text>
+            <Text style={styles.phoneInputTitle}>Guardian Phone Numbers</Text>
             <Text style={styles.phoneInputSubtitle}>
-              Alerts will be sent to this number in case of emergency
+              Alerts will be sent to these numbers in case of emergency
             </Text>
-            <TextInput
-              style={styles.phoneInput}
-              placeholder="Enter phone number (e.g. +919876543210)"
-              placeholderTextColor="#666"
-              keyboardType="phone-pad"
-              value={phoneInput}
-              onChangeText={setPhoneInput}
-            />
+            
+            {/* Guardian 1 (Primary) */}
+            <View style={styles.guardianInputRow}>
+              <Text style={styles.guardianLabel}>Primary Guardian</Text>
+              <TextInput
+                style={styles.phoneInput}
+                placeholder="Enter phone number (e.g. +919876543210)"
+                placeholderTextColor="#666"
+                keyboardType="phone-pad"
+                value={phoneInput}
+                onChangeText={setPhoneInput}
+              />
+            </View>
+            
+            {/* Guardian 2 */}
+            <View style={styles.guardianInputRow}>
+              <Text style={styles.guardianLabel}>Guardian 2 (Optional)</Text>
+              <TextInput
+                style={styles.phoneInput}
+                placeholder="Enter phone number"
+                placeholderTextColor="#666"
+                keyboardType="phone-pad"
+                value={guardianPhone2}
+                onChangeText={(text) => setGuardianPhone(text, 2)}
+              />
+            </View>
+            
+            {/* Guardian 3 */}
+            <View style={styles.guardianInputRow}>
+              <Text style={styles.guardianLabel}>Guardian 3 (Optional)</Text>
+              <TextInput
+                style={styles.phoneInput}
+                placeholder="Enter phone number"
+                placeholderTextColor="#666"
+                keyboardType="phone-pad"
+                value={guardianPhone3}
+                onChangeText={(text) => setGuardianPhone(text, 3)}
+              />
+            </View>
+            
             <View style={styles.phoneButtons}>
               <TouchableOpacity 
                 style={styles.phoneCancelButton}
@@ -635,7 +667,7 @@ export default function HomeScreen() {
                 style={styles.phoneSaveButton}
                 onPress={saveGuardianPhone}
               >
-                <Text style={styles.phoneSaveText}>Save</Text>
+                <Text style={styles.phoneSaveText}>Save All</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -647,7 +679,11 @@ export default function HomeScreen() {
             onPress={() => setShowPhoneInput(true)}
           >
             <Ionicons name="people" size={20} color="#3498db" />
-            <Text style={styles.guardianText}>Guardian: {guardianPhone}</Text>
+            <View style={styles.guardianTextContainer}>
+              <Text style={styles.guardianText}>Guardian 1: {guardianPhone}</Text>
+              {guardianPhone2 ? <Text style={styles.guardianTextSecondary}>Guardian 2: {guardianPhone2}</Text> : null}
+              {guardianPhone3 ? <Text style={styles.guardianTextSecondary}>Guardian 3: {guardianPhone3}</Text> : null}
+            </View>
             <Ionicons name="pencil" size={16} color="#888" />
           </TouchableOpacity>
         )}
