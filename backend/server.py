@@ -1283,8 +1283,8 @@ async def analyze_chat_safety(request: ChatAnalysisRequest):
         # Configure Gemini
         genai.configure(api_key=GEMINI_API_KEY)
         
-        # Create the model
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Create the model (using gemini-1.5-flash for vision capabilities)
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
         # Build the message
         analysis_prompt = f"""{CHAT_ANALYSIS_SYSTEM_PROMPT}
