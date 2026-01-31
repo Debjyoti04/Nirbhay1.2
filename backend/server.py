@@ -1277,14 +1277,12 @@ async def analyze_chat_safety(request: ChatAnalysisRequest):
         )
     
     try:
-        import google.generativeai as genai
+        from google import genai
+        from google.genai import types
         import json
         
-        # Configure Gemini
-        genai.configure(api_key=GEMINI_API_KEY)
-        
-        # Create the model (using gemini-1.5-flash for vision capabilities)
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        # Create client with API key
+        client = genai.Client(api_key=GEMINI_API_KEY)
         
         # Build the message
         analysis_prompt = f"""{CHAT_ANALYSIS_SYSTEM_PROMPT}
@@ -1293,14 +1291,17 @@ Please analyze this chat screenshot for safety concerns."""
         if request.context:
             analysis_prompt += f"\n\nAdditional context from user: {request.context}"
         
-        # Prepare image data
-        image_data = {
-            "mime_type": "image/png",
-            "data": request.image_base64
-        }
+        # Prepare image as Part
+        image_part = types.Part.from_bytes(
+            data=base64.b64decode(request.image_base64),
+            mime_type="image/png"
+        )
         
-        # Send for analysis with image
-        response = model.generate_content([analysis_prompt, image_data])
+        # Send for analysis with image using gemini-2.0-flash-exp model
+        response = client.models.generate_content(
+            model="gemini-2.0-flash-exp",
+            contents=[analysis_prompt, image_part]
+        )
         
         # Parse the JSON response
         response_text = response.text.strip()
