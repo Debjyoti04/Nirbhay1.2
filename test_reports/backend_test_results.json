@@ -1,0 +1,123 @@
+{
+  "summary": {
+    "total_tests": 16,
+    "passed": 15,
+    "failed": 1,
+    "success_rate": 93.8
+  },
+  "results": [
+    {
+      "test": "Health Check - Response Structure",
+      "passed": true,
+      "details": "All required fields present: ['status', 'timestamp', 'services']",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:26.929193"
+    },
+    {
+      "test": "Health Check - Status",
+      "passed": true,
+      "details": "Service reports healthy status",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:26.929199"
+    },
+    {
+      "test": "Health Check - database service",
+      "passed": true,
+      "details": "database: connected",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:26.929201"
+    },
+    {
+      "test": "Health Check - unwired_labs service",
+      "passed": true,
+      "details": "unwired_labs: configured",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:26.929203"
+    },
+    {
+      "test": "Health Check - fast2sms service",
+      "passed": true,
+      "details": "fast2sms: configured",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:26.929204"
+    },
+    {
+      "test": "Route Analysis - Response Structure",
+      "passed": true,
+      "details": "All required fields present",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:28.395880"
+    },
+    {
+      "test": "Route Analysis - Safety Score",
+      "passed": true,
+      "details": "Safety score: 62.5",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:28.395891"
+    },
+    {
+      "test": "Route Analysis - Safety Level",
+      "passed": true,
+      "details": "Safety level: moderate",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:28.395895"
+    },
+    {
+      "test": "Route Analysis - Safety Factors",
+      "passed": true,
+      "details": "Found 5 safety factors",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:28.395898"
+    },
+    {
+      "test": "Route Analysis - Factor 1 Structure",
+      "passed": true,
+      "details": "Factor: Time of Day (score: 55.0)",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:28.395903"
+    },
+    {
+      "test": "Route Analysis - Factor 2 Structure",
+      "passed": true,
+      "details": "Factor: Crowd Density (score: 35.0)",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:28.395906"
+    },
+    {
+      "test": "Route Analysis - Factor 3 Structure",
+      "passed": true,
+      "details": "Factor: Lighting (score: 45.0)",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:28.395909"
+    },
+    {
+      "test": "Route Analysis - Transport Modes",
+      "passed": true,
+      "details": "Found 4 transport modes",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:28.395911"
+    },
+    {
+      "test": "Route Analysis - Transport Modes Sorting",
+      "passed": true,
+      "details": "Transport modes sorted by safety score: [77.5, 72.5, 67.5, 57.5]",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:28.395921"
+    },
+    {
+      "test": "Route Analysis - Recommendations",
+      "passed": true,
+      "details": "Found 5 recommendations",
+      "error": "",
+      "timestamp": "2026-01-31T22:35:28.395923"
+    },
+    {
+      "test": "Chat Analysis - HTTP Status",
+      "passed": false,
+      "details": "",
+      "error": "Expected 200, got 520: {\"detail\":\"Analysis failed: UserMessage.__init__() got an unexpected keyword argument 'image_contents'\"}",
+      "timestamp": "2026-01-31T22:35:28.432114"
+    }
+  ],
+  "timestamp": "2026-01-31T22:35:28.432361"
+}
