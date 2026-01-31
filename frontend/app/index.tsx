@@ -953,6 +953,45 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.9,
   },
+  featuresSection: {
+    marginBottom: 16,
+  },
+  featuresSectionTitle: {
+    color: '#888',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  featuresGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  featureCard: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+  },
+  featureIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  featureTitle: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  featureDesc: {
+    color: '#888',
+    fontSize: 12,
+    textAlign: 'center',
+  },
   infoSection: {
     gap: 12,
   },
