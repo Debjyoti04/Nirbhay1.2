@@ -243,7 +243,6 @@ RISK_RULES = {
 }
 
 # Thresholds for panic detection - LOWERED for better sensitivity
-# Original values were too high for testing: accel=15, gyro=5
 PANIC_ACCEL_THRESHOLD = 2.0   # m/s^2 variance threshold for panic (lowered from 15)
 PANIC_GYRO_THRESHOLD = 0.5    # rad/s variance threshold for panic (lowered from 5)
 NIGHT_START_HOUR = 22  # 10 PM
