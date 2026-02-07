@@ -1,10 +1,4 @@
-Here is a **clean, Windows-only `README.md`**, rewritten so there are **no Mac/Linux commands or references**, and everything works smoothly on **Windows 10/11**.
 
-You can **copy-paste this directly as `README.md`**.
-
----
-
-````markdown
 # Nirbhay – Autonomous Women Safety System (Windows)
 
 ![Nirbhay Logo](frontend/assets/images/icon.png)
